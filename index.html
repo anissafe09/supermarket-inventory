@@ -5,60 +5,46 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Supermarket Inventory</title>
 <style>
-body{font-family:Arial,sans-serif;margin:0;background:#f4f6f8;color:#17202a}
-header{background:#1769e0;color:white;padding:20px}
-main{max-width:700px;margin:auto;padding:16px}
-.card{background:white;padding:16px;border-radius:14px;margin-bottom:16px;box-shadow:0 2px 10px #0001}
-label{display:block;font-weight:bold;margin:12px 0 6px}
+body{font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif;margin:0;background:#f4f6f8;color:#17202a}
+header{background:#1769e0;color:#fff;padding:20px 16px}
+main{max-width:720px;margin:auto;padding:16px}
+.card{background:#fff;padding:16px;border-radius:14px;margin-bottom:16px;box-shadow:0 2px 10px #0001}
+label{display:block;font-weight:700;margin:12px 0 6px}
 input,button{width:100%;padding:13px;border-radius:9px;font-size:16px;box-sizing:border-box}
 input{border:1px solid #ccd2da}
-button{border:0;background:#1769e0;color:white;font-weight:bold;margin-top:10px}
-.secondary{background:#e8edf5;color:#17202a}
-.danger{background:#c62828}
+button{border:0;background:#1769e0;color:white;font-weight:700;margin-top:10px}
+.secondary{background:#e8edf5;color:#17202a}.danger{background:#c62828}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#video{width:100%;border-radius:12px;background:#111;display:none;margin-top:12px}
 table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}
 th,td{padding:9px 5px;border-bottom:1px solid #eee;text-align:left}
-#reader{display:none;margin-top:12px}
-.note{font-size:13px;color:#667}
+.note{font-size:13px;color:#667;line-height:1.4}
 </style>
 </head>
 <body>
-<header>
-<h2>Supermarket Inventory</h2>
-<div>Scan barcodes and save product names.</div>
-</header>
+<header><h2>Supermarket Inventory</h2><div>Scan barcodes and save product names.</div></header>
 <main>
 <section class="card">
-<button id="scan">📷 Scan barcode</button>
-<div id="reader"></div>
-<p id="status" class="note"></p>
-<label>Barcode</label>
+<button id="scan">📷 Start camera scanner</button>
+<video id="video" playsinline></video>
+<p id="status" class="note">Camera scanning uses a library that works in Safari when the app is opened through HTTPS.</p>
+<label for="barcode">Barcode</label>
 <input id="barcode" inputmode="numeric" placeholder="Scan or type barcode">
-<label>Product name</label>
+<label for="name">Product name</label>
 <input id="name" placeholder="e.g. Milk 1L">
-<div class="grid">
-<button id="save">Save product</button>
-<button class="secondary" id="clear">Clear</button>
-</div>
+<div class="grid"><button id="save">Save product</button><button id="clear" class="secondary">Clear</button></div>
 </section>
-
 <section class="card">
-<div class="grid">
-<button id="export">⬇ Export CSV</button>
-<button class="secondary" id="copy">Copy for Sheets</button>
-</div>
-<button class="danger" id="delete">Delete all products</button>
-<p class="note">Products are stored in this browser on this device. Export backups regularly.</p>
+<div class="grid"><button id="export">⬇ Export CSV</button><button id="copy" class="secondary">Copy for Sheets</button></div>
+<button id="delete" class="danger">Delete all products</button>
+<p class="note">Data is stored in this browser on this device. Export backups regularly.</p>
 </section>
-
-<section class="card">
-<strong>Products: <span id="count">0</span></strong>
-<div id="products"></div>
-</section>
+<section class="card"><strong>Products: <span id="count">0</span></strong><div id="products"></div></section>
 </main>
 
+<script src="https://unpkg.com/@zxing/browser@latest"></script>
 <script>
-const KEY="supermarket_inventory";
+const KEY="supermarket_inventory_ios";
 let products=JSON.parse(localStorage.getItem(KEY)||"[]");
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
@@ -71,60 +57,38 @@ function render(){
  localStorage.setItem(KEY,JSON.stringify(products));
 }
 $("save").onclick=()=>{
- let barcode=$("barcode").value.trim(),name=$("name").value.trim();
+ const barcode=$("barcode").value.trim(),name=$("name").value.trim();
  if(!barcode||!name){$("status").textContent="Enter a barcode and product name.";return}
- let existing=products.find(p=>p.barcode===barcode);
- if(existing) existing.name=name; else products.push({barcode,name});
- $("status").textContent=existing?"Product updated.":"Product saved.";
+ const existing=products.find(p=>p.barcode===barcode);
+ if(existing)existing.name=name;else products.push({barcode,name});
  $("name").value="";render();
+ $("status").textContent=existing?"Product updated.":"Product saved.";
 };
 $("clear").onclick=()=>{$("barcode").value="";$("name").value="";$("status").textContent=""};
 $("delete").onclick=()=>{if(confirm("Delete all products?")){products=[];render()}};
-function csv(){
- return "Barcode,Product Name\n"+products.map(p=>[p.barcode,p.name].map(v=>'"'+String(v).replaceAll('"','""')+'"').join(",")).join("\n");
-}
-$("export").onclick=()=>{
- let a=document.createElement("a");
- a.href=URL.createObjectURL(new Blob([csv()],{type:"text/csv"}));
- a.download="supermarket_inventory.csv";a.click();
-};
-$("copy").onclick=async()=>{
- let text="Barcode\tProduct Name\n"+products.map(p=>p.barcode+"\t"+p.name).join("\n");
- try{await navigator.clipboard.writeText(text);$("status").textContent="Copied. Paste into Google Sheets."}
- catch(e){$("status").textContent="Copy unavailable. Use Export CSV."}
-};
-let stream=null;
+function csv(){return "Barcode,Product Name\n"+products.map(p=>[p.barcode,p.name].map(v=>'"'+String(v).replaceAll('"','""')+'"').join(",")).join("\n")}
+$("export").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv()],{type:"text/csv"}));a.download="supermarket_inventory.csv";a.click()};
+$("copy").onclick=async()=>{const t="Barcode\tProduct Name\n"+products.map(p=>p.barcode+"\t"+p.name).join("\n");try{await navigator.clipboard.writeText(t);$("status").textContent="Copied. Paste into Google Sheets."}catch(e){$("status").textContent="Copy unavailable. Use Export CSV."}};
+
+let controls=null;
 $("scan").onclick=async()=>{
- $("reader").style.display="block";
- $("status").textContent="Starting camera...";
- if(!("BarcodeDetector" in window)){
-  $("status").textContent="This browser does not support automatic scanning. Type the barcode manually or use a supported Chrome browser.";
-  return;
- }
+ if(!window.ZXingBrowser){$("status").textContent="Scanner library did not load. Check your internet connection.";return}
+ if(controls){controls.stop();controls=null;$("video").style.display="none";$("scan").textContent="📷 Start camera scanner";$("status").textContent="Scanner stopped.";return}
  try{
-  const supported=await BarcodeDetector.getSupportedFormats();
-  const formats=["ean_13","ean_8","upc_a","upc_e","code_128","code_39","itf"].filter(f=>supported.includes(f));
-  const detector=new BarcodeDetector({formats});
-  const video=document.createElement("video");
-  video.setAttribute("playsinline","");
-  video.style.width="100%";
-  $("reader").innerHTML="";$("reader").appendChild(video);
-  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}}});
-  video.srcObject=stream;await video.play();
-  const scan=async()=>{
-   if(!stream)return;
-   try{
-    const codes=await detector.detect(video);
-    if(codes.length){
-     $("barcode").value=codes[0].rawValue;
-     $("status").textContent="Barcode scanned. Enter product name.";
-     stream.getTracks().forEach(t=>t.stop());stream=null;$("reader").style.display="none";return;
-    }
-   }catch(e){}
-   requestAnimationFrame(scan);
-  };
-  scan();
- }catch(e){$("status").textContent="Camera access failed. Allow camera permission and try again."}
+  $("video").style.display="block";$("scan").textContent="⏹ Stop scanner";$("status").textContent="Allow camera access, then point at a barcode.";
+  const reader=new ZXingBrowser.BrowserMultiFormatReader();
+  controls=await reader.decodeFromConstraints({video:{facingMode:{ideal:"environment"}}},"video",(result,error)=>{
+   if(result){
+    $("barcode").value=result.getText();
+    $("status").textContent="Barcode scanned. Enter the product name.";
+    if(controls){controls.stop();controls=null}
+    $("video").style.display="none";$("scan").textContent="📷 Start camera scanner";
+   }
+  });
+ }catch(e){
+  $("status").textContent="Camera could not start. Check Safari camera permission and confirm the site begins with https://.";
+  $("video").style.display="none";$("scan").textContent="📷 Start camera scanner";controls=null;
+ }
 };
 render();
 </script>
